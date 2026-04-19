@@ -187,6 +187,128 @@ def add_dtc(
 
     return df
 
+def add_lvn(
+    df: pd.DataFrame,
+    range_mask: pd.Series,
+    tick_size: float = 0.25,
+    min_price: float | None = None,
+    max_price: float | None = None,
+) -> pd.DataFrame:
+    df = df.copy()
 
+    required_cols = {"high", "low", "volume"}
+    missing = required_cols - set(df.columns)
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
 
+    if len(range_mask) != len(df):
+        raise ValueError("range_mask must be the same length as df")
 
+    range_mask = range_mask.fillna(False).astype(bool)
+
+    selected = df.loc[range_mask, ["high", "low", "volume"]].copy()
+
+    if selected.empty:
+        df["lvn_price"] = np.nan
+        df["lvn_volume"] = np.nan
+        return df
+
+    profile_low = selected["low"].min() if min_price is None else min_price
+    profile_high = selected["high"].max() if max_price is None else max_price
+
+    if profile_high <= profile_low:
+        df["lvn_price"] = np.nan
+        df["lvn_volume"] = np.nan
+        return df
+
+    # Build price bins
+    bins = np.arange(profile_low, profile_high + tick_size, tick_size)
+    if len(bins) < 2:
+        bins = np.array([profile_low, profile_low + tick_size])
+
+    volume_profile = pd.Series(0.0, index=bins[:-1])
+
+    # Distribute each bar's volume across all touched price bins
+    for _, row in selected.iterrows():
+        bar_low = row["low"]
+        bar_high = row["high"]
+        bar_vol = row["volume"]
+
+        touched = volume_profile.index[
+            (volume_profile.index + tick_size > bar_low) &
+            (volume_profile.index <= bar_high)
+        ]
+
+        if len(touched) == 0:
+            # fallback: assign to nearest bin by midpoint
+            midpoint = (bar_low + bar_high) / 2
+            nearest_idx = np.abs(volume_profile.index - midpoint).argmin()
+            volume_profile.iloc[nearest_idx] += bar_vol
+        else:
+            volume_profile.loc[touched] += bar_vol / len(touched)
+
+    non_zero = volume_profile[volume_profile > 0]
+
+    if non_zero.empty:
+        lvn_price = np.nan
+        lvn_volume = np.nan
+    else:
+        lvn_price = non_zero.idxmin()
+        lvn_volume = non_zero.min()
+
+    df["lvn_price"] = lvn_price
+    df["lvn_volume"] = lvn_volume
+
+    return df
+
+def add_fib_levels(
+    df: pd.DataFrame,
+    range_mask: pd.Series,
+    high_col: str = "high",
+    low_col: str = "low",
+) -> pd.DataFrame:
+    df = df.copy()
+
+    required_cols = {high_col, low_col}
+    missing = required_cols - set(df.columns)
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
+
+    if len(range_mask) != len(df):
+        raise ValueError("range_mask must be the same length as df")
+
+    range_mask = range_mask.fillna(False).astype(bool)
+
+    selected = df.loc[range_mask, [high_col, low_col]].copy()
+
+    if selected.empty:
+        df["fib_0_5"] = np.nan
+        df["fib_0_618"] = np.nan
+        df["fib_0_705"] = np.nan
+        df["fib_0_79"] = np.nan
+        df["range_high"] = np.nan
+        df["range_low"] = np.nan
+        return df
+
+    range_high = selected[high_col].max()
+    range_low = selected[low_col].min()
+    range_size = range_high - range_low
+
+    if pd.isna(range_size) or range_size <= 0:
+        df["fib_0_5"] = np.nan
+        df["fib_0_618"] = np.nan
+        df["fib_0_705"] = np.nan
+        df["fib_0_79"] = np.nan
+        df["range_high"] = range_high
+        df["range_low"] = range_low
+        return df
+
+    df["range_high"] = range_high
+    df["range_low"] = range_low
+
+    df["fib_0_5"] = range_low + (range_size * 0.5)
+    df["fib_0_618"] = range_low + (range_size * 0.618)
+    df["fib_0_705"] = range_low + (range_size * 0.705)
+    df["fib_0_79"] = range_low + (range_size * 0.79)
+
+    return df
