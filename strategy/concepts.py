@@ -44,7 +44,6 @@ def add_fvg(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
-import pandas as pd
 
 
 def add_vwap(df: pd.DataFrame) -> pd.DataFrame:
