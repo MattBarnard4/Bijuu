@@ -1,3 +1,6 @@
+let dashboardData = null;
+let monteCarloRendered = false;
+
 function metricColorClass(label, value) {
   const negativeLabels = ["Max DD", "Avg R Per Loss", "Risk of Ruin"];
   const positiveLabels = ["Sharpe Ratio", "RR Secured", "Avg R Per Win"];
@@ -7,7 +10,8 @@ function metricColorClass(label, value) {
   if (label === "EV") return "gold";
   if (label === "Avg Stop Size") return "accent";
   if (label === "Avg Drawdown") return "warning";
-  return "";
+
+  return "default"; // 👈 ADD THIS
 }
 
 function createCard(label, value, desc) {
@@ -25,8 +29,8 @@ function renderCards(metrics) {
   const performance = [
     ["Sharpe Ratio", metrics.sharpe_ratio, "Annualised excess return per unit of total volatility."],
     ["RR Secured", metrics.rr_secured, "Average reward-to-risk ratio across the strategy profile."],
-    ["Avg Stop Size", `$${metrics.avg_stop_size}`, "Average dollar distance from entry to stop-loss."],
-    ["EV", `${metrics.ev}R`, "Expected value per trade in R-multiple terms."],
+    ["Avg Stop Size", `$${Number(metrics.avg_stop_size).toFixed(2)}`, "Average dollar distance from entry to stop-loss."],
+    ["EV", metrics.ev != null ? `${metrics.ev}R` : "N/A", "Expected value per trade in R-multiple terms."],
     ["Avg R Per Win", metrics.avg_r_per_win, "Average R-multiple achieved on winning trades."],
     ["Avg R Per Loss", metrics.avg_r_per_loss, "Average R-multiple taken on losing trades."]
   ];
@@ -59,7 +63,7 @@ function renderMonteCarloCards(mc) {
     ["95th % Ending P&L", `$${s.p95_ending_pnl}`, "Upper-end ending P&L estimate from the simulation set."],
     ["95th % Max Drawdown", `$${s.p95_max_drawdown}`, "Severe but plausible drawdown level across simulations."],
     ["Median Losing Streak", `${s.median_longest_losing_streak}`, "Median longest consecutive losing run across paths."],
-    ["Beat Backtest Probability", `${s.probability_beat_backtest}%`, "Chance a simulated path finishes at or above the realised backtest."],
+    ["Beat Backtest Probability", `${s.probability_beat_backtest}%`, "Chance a simulated path finishes at or above the realised backtest."]
   ];
 
   document.getElementById("monte-carlo-cards").innerHTML = cards
@@ -71,7 +75,7 @@ function renderSummary(metrics) {
   document.getElementById("run-summary").textContent =
 `Trades: ${metrics.total_trades}
 Sharpe: ${metrics.sharpe_ratio}
-EV: ${metrics.ev}R
+EV: ${metrics.ev != null ? `${metrics.ev}R` : "N/A"}
 RR Secured: ${metrics.rr_secured}
 Max DD: ${metrics.max_dd}%
 Avg Drawdown: ${metrics.avg_dd}%
@@ -93,6 +97,111 @@ function renderTrades(trades) {
       <td class="${t.r_multiple >= 0 ? "positive" : "negative"}">${Number(t.r_multiple).toFixed(2)}</td>
     </tr>
   `).join("");
+}
+
+function baseMiniLayout() {
+  return {
+    paper_bgcolor: "rgba(0,0,0,0)",
+    plot_bgcolor: "rgba(0,0,0,0)",
+    font: {
+      color: "#f4f7ff",
+      family: "Inter, Segoe UI, Arial, sans-serif"
+    },
+    margin: { l: 40, r: 12, t: 6, b: 30 },
+    xaxis: {
+      gridcolor: "#141a31",
+      zerolinecolor: "#141a31",
+      tickfont: { color: "#7d88ad", size: 11 },
+      fixedrange: true
+    },
+    yaxis: {
+      gridcolor: "#141a31",
+      zerolinecolor: "#141a31",
+      tickfont: { color: "#7d88ad", size: 11 },
+      fixedrange: true
+    },
+    bargap: 0.28,
+    showlegend: false
+  };
+}
+
+function renderTopCharts(charts) {
+  if (!charts) return;
+
+  const dist = charts.win_loss_distribution;
+  const hour = charts.pnl_by_hour;
+  const day = charts.pnl_by_day;
+
+  if (!dist || !hour || !day) return;
+
+  const miniLayout = {
+    paper_bgcolor: "rgba(0,0,0,0)",
+    plot_bgcolor: "rgba(0,0,0,0)",
+    font: {
+      color: "#f4f7ff",
+      family: "Inter, Segoe UI, Arial, sans-serif"
+    },
+    margin: { l: 36, r: 10, t: 6, b: 30 },
+    xaxis: {
+      gridcolor: "#141a31",
+      zerolinecolor: "#141a31",
+      tickfont: { color: "#7d88ad", size: 10 },
+      fixedrange: true
+    },
+    yaxis: {
+      gridcolor: "#141a31",
+      zerolinecolor: "#141a31",
+      tickfont: { color: "#7d88ad", size: 10 },
+      fixedrange: true
+    },
+    bargap: 0.28,
+    showlegend: false
+  };
+
+  Plotly.newPlot(
+    "winloss-chart",
+    [{
+      x: dist.labels,
+      y: dist.values,
+      type: "bar",
+      marker: {
+        color: dist.values.map(v => v >= 0 ? "#69e1b0" : "#ff6b81")
+      },
+      hovertemplate: "%{x}<br>%{y}<extra></extra>"
+    }],
+    miniLayout,
+    { responsive: true, displayModeBar: false }
+  );
+
+  Plotly.newPlot(
+    "hour-chart",
+    [{
+      x: hour.labels,
+      y: hour.values,
+      type: "bar",
+      marker: {
+        color: hour.values.map(v => v >= 0 ? "#69e1b0" : "#ff6b81")
+      },
+      hovertemplate: "%{x}:00<br>$%{y:,.2f}<extra></extra>"
+    }],
+    miniLayout,
+    { responsive: true, displayModeBar: false }
+  );
+
+  Plotly.newPlot(
+    "day-chart",
+    [{
+      x: day.labels,
+      y: day.values,
+      type: "bar",
+      marker: {
+        color: day.values.map(v => v >= 0 ? "#69e1b0" : "#ff6b81")
+      },
+      hovertemplate: "%{x}<br>$%{y:,.2f}<extra></extra>"
+    }],
+    miniLayout,
+    { responsive: true, displayModeBar: false }
+  );
 }
 
 function renderMonteCarloChart(mc) {
@@ -167,151 +276,144 @@ function renderMonteCarloChart(mc) {
   );
 }
 
-function renderChart(curve) {
+function renderEquityChart(curve) {
   const equityTrace = {
     x: curve.dates,
     y: curve.equity,
     type: "scatter",
     mode: "lines",
-    name: "Equity",
-    line: { color: "#7c83ff", width: 2.5 }
-  };
-
-  const ddTrace = {
-    x: curve.dates,
-    y: curve.drawdown,
-    type: "scatter",
-    mode: "lines",
-    name: "Drawdown %",
-    line: { color: "#ff6b81", width: 1.8 },
+    line: { color: "#7c83ff", width: 2.2 },
     fill: "tozeroy",
-    yaxis: "y2"
+    fillcolor: "rgba(124, 131, 255, 0.08)",
+    hovertemplate: "%{x}<br>$%{y:,.2f}<extra></extra>"
   };
 
   const layout = {
-    paper_bgcolor: "#0c1020",
-    plot_bgcolor: "#0c1020",
-    font: { color: "#f4f7ff" },
-    margin: { l: 45, r: 25, t: 20, b: 45 },
-    xaxis: { gridcolor: "#141a31", zerolinecolor: "#141a31" },
-    yaxis: { title: "Equity", gridcolor: "#141a31", zerolinecolor: "#141a31" },
-    yaxis2: {
-      title: "Drawdown %",
-      overlaying: "y",
-      side: "right",
-      gridcolor: "#141a31",
-      zerolinecolor: "#141a31"
-    },
-    legend: { orientation: "h", y: 1.08, x: 0 }
-  };
-
-  Plotly.newPlot("equity-chart", [equityTrace, ddTrace], layout, { responsive: true });
-}
-function baseMiniLayout() {
-  return {
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: "rgba(0,0,0,0)",
-    font: {
-      color: "#f4f7ff",
-      family: "Inter, Segoe UI, Arial, sans-serif"
-    },
-    margin: { l: 42, r: 12, t: 8, b: 34 },
+    font: { color: "#f4f7ff" },
+    margin: { l: 42, r: 14, t: 10, b: 34 },
     xaxis: {
       gridcolor: "#141a31",
       zerolinecolor: "#141a31",
-      tickfont: { color: "#7d88ad", size: 11 },
-      fixedrange: true
+      tickfont: { color: "#7d88ad", size: 11 }
     },
     yaxis: {
       gridcolor: "#141a31",
       zerolinecolor: "#141a31",
-      tickfont: { color: "#7d88ad", size: 11 },
-      fixedrange: true
+      tickfont: { color: "#7d88ad", size: 11 }
     },
-    bargap: 0.28,
     showlegend: false
   };
+
+  Plotly.newPlot("equity-chart", [equityTrace], layout, {
+    responsive: true,
+    displayModeBar: false
+  });
 }
 
-function renderTopCharts(charts) {
-  const distColors = charts.win_loss_distribution.values.map(v =>
-    v >= 0 ? "#69e1b0" : "#ff6b81"
-  );
+function renderDrawdownChart(curve) {
+  const drawdownAbs = curve.drawdown.map(v => Math.abs(Number(v)));
 
-  Plotly.newPlot(
-    "winloss-chart",
-    [{
-      x: charts.win_loss_distribution.labels,
-      y: charts.win_loss_distribution.values,
-      type: "bar",
-      marker: {
-        color: distColors,
-        line: { color: distColors, width: 1 }
-      },
-      hovertemplate: "%{x}<br>%{y}<extra></extra>"
-    }],
-    {
-      ...baseMiniLayout()
+  const ddTrace = {
+    x: curve.dates,
+    y: drawdownAbs,
+    type: "scatter",
+    mode: "lines",
+    line: { color: "#ff4d4f", width: 1.8 },
+    fill: "tozeroy",
+    fillcolor: "rgba(255, 77, 79, 0.12)",
+    hovertemplate: "%{x}<br>%{y:.2f}%<extra></extra>"
+  };
+
+  const layout = {
+    paper_bgcolor: "rgba(0,0,0,0)",
+    plot_bgcolor: "rgba(0,0,0,0)",
+    font: { color: "#f4f7ff" },
+    margin: { l: 42, r: 14, t: 10, b: 34 },
+    xaxis: {
+      gridcolor: "#141a31",
+      zerolinecolor: "#141a31",
+      tickfont: { color: "#7d88ad", size: 11 }
     },
-    { responsive: true, displayModeBar: false }
-  );
-
-  const hourColors = charts.pnl_by_hour.values.map(v =>
-    v >= 0 ? "#69e1b0" : "#ff6b81"
-  );
-
-  Plotly.newPlot(
-    "hour-chart",
-    [{
-      x: charts.pnl_by_hour.labels,
-      y: charts.pnl_by_hour.values,
-      type: "bar",
-      marker: {
-        color: hourColors,
-        line: { color: hourColors, width: 1 }
-      },
-      hovertemplate: "%{x}:00<br>$%{y}<extra></extra>"
-    }],
-    {
-      ...baseMiniLayout()
+    yaxis: {
+      autorange: "reversed",
+      range: [Math.max(...drawdownAbs) * 1.2, 0],
+      gridcolor: "#141a31",
+      zerolinecolor: "#141a31",
+      tickfont: { color: "#7d88ad", size: 11 }
     },
-    { responsive: true, displayModeBar: false }
-  );
+    showlegend: false
+  };
 
-  const dayColors = charts.pnl_by_day.values.map(v =>
-    v >= 0 ? "#69e1b0" : "#ff6b81"
-  );
-
-  Plotly.newPlot(
-    "day-chart",
-    [{
-      x: charts.pnl_by_day.labels,
-      y: charts.pnl_by_day.values,
-      type: "bar",
-      marker: {
-        color: dayColors,
-        line: { color: dayColors, width: 1 }
-      },
-      hovertemplate: "%{x}<br>$%{y}<extra></extra>"
-    }],
-    {
-      ...baseMiniLayout()
-    },
-    { responsive: true, displayModeBar: false }
-  );
+  Plotly.newPlot("drawdown-chart", [ddTrace], layout, {
+    responsive: true,
+    displayModeBar: false
+  });
 }
+
+function resizePlot(id) {
+  const el = document.getElementById(id);
+  if (el && el.data) {
+    Plotly.Plots.resize(el);
+  }
+}
+
+function switchTab(targetId) {
+  document.querySelectorAll(".tab-view").forEach(view => {
+    view.classList.add("hidden");
+  });
+
+  document.querySelectorAll(".nav-tab").forEach(tab => {
+    tab.classList.remove("active");
+  });
+
+  document.getElementById(targetId).classList.remove("hidden");
+  document.querySelector(`.nav-tab[data-tab="${targetId}"]`).classList.add("active");
+
+  if (targetId === "monte-carlo-view" && dashboardData && !monteCarloRendered) {
+    renderMonteCarloCards(dashboardData.monte_carlo);
+    renderMonteCarloChart(dashboardData.monte_carlo);
+    monteCarloRendered = true;
+  }
+
+setTimeout(() => {
+  Plotly.Plots.resize(document.getElementById("equity-chart"));
+  Plotly.Plots.resize(document.getElementById("drawdown-chart"));
+  Plotly.Plots.resize(document.getElementById("winloss-chart"));
+  Plotly.Plots.resize(document.getElementById("hour-chart"));
+  Plotly.Plots.resize(document.getElementById("day-chart"));
+}, 120);
+}
+
+function initNav() {
+  document.querySelectorAll(".nav-tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      switchTab(tab.dataset.tab);
+    });
+  });
+}
+
 async function initDashboard() {
+  initNav();
+
   const res = await fetch("/api/dashboard-data");
   const data = await res.json();
+  dashboardData = data;
 
-  renderTopCharts(data.charts);   // 👈 ADD THIS BACK
+  if (data.charts) renderTopCharts(data.charts);
 
-  renderCards(data.metrics);
-  renderMonteCarloCards(data.monte_carlo);
-  renderSummary(data.metrics);
-  renderTrades(data.trades);
-  renderMonteCarloChart(data.monte_carlo);
-  renderChart(data.equity_curve);
+  if (data.metrics) {
+    renderCards(data.metrics);
+    renderSummary(data.metrics);
+  }
+
+  if (data.trades) renderTrades(data.trades);
+
+  if (data.equity_curve) {
+    renderEquityChart(data.equity_curve);
+    renderDrawdownChart(data.equity_curve);
+  }
 }
 
 initDashboard();
