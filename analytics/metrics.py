@@ -348,7 +348,7 @@ def build_dashboard_metrics(results_df: pd.DataFrame, trades_df: pd.DataFrame) -
         "sharpe_ratio": calculate_sharpe_ratio(results_df),
         "rr_secured": calculate_rr_secured(trades_df),
         "avg_stop_size": calculate_avg_stop_size(trades_df),
-        "ev_r": calculate_expectancy_r(trades_df),
+        "ev": calculate_expectancy_r(trades_df),
         "ev_dollar": calculate_expectancy_dollar(trades_df),
         "avg_r_per_win": calculate_avg_r_per_win(trades_df),
         "avg_r_per_loss": calculate_avg_r_per_loss(trades_df),
