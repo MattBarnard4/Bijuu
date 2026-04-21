@@ -16,7 +16,22 @@
       </div>
       <div class="status-pill">Dashboard ready</div>
     </header>
+    <section class="charts-row">
+      <div class="chart-panel">
+        <div class="mini-chart-title">WIN / LOSS DISTRIBUTION</div>
+        <div id="winloss-chart" class="mini-chart"></div>
+      </div>
 
+      <div class="chart-panel">
+        <div class="mini-chart-title">P&L BY HOUR (EST)</div>
+        <div id="hour-chart" class="mini-chart"></div>
+      </div>
+
+      <div class="chart-panel">
+        <div class="mini-chart-title">P&L BY DAY</div>
+        <div id="day-chart" class="mini-chart"></div>
+      </div>
+    </section>
     <section class="section">
       <div class="section-header">
         <span>PERFORMANCE & TRADE QUALITY</span>
@@ -29,6 +44,19 @@
         <span>DRAWDOWN & RISK</span>
       </div>
       <div class="cards-grid" id="risk-cards"></div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <span>MONTE CARLO ANALYSIS</span>
+      </div>
+
+      <div class="panel monte-panel">
+        <div class="panel-title">Monte Carlo Equity Paths</div>
+        <div id="monte-carlo-chart"></div>
+      </div>
+
+      <div class="cards-grid monte-cards" id="monte-carlo-cards"></div>
     </section>
 
     <section class="lower-grid">
