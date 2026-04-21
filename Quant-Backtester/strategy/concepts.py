@@ -48,9 +48,6 @@ def add_fvg(df: pd.DataFrame) -> pd.DataFrame:
 def add_vwap(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
-    # Ensure timezone-aware datetime in New York time
-    df["datetime_est"] = pd.to_datetime(df["datetime"], utc=True).dt.tz_convert("America/New_York")
-
     # Create session key:
     # 18:00 ET and later belongs to the next trading session
     session_date = df["datetime_est"].dt.date
@@ -312,4 +309,3 @@ def add_fib_levels(
     df["fib_0_79"] = range_low + (range_size * 0.79)
 
     return df
-"""word"""

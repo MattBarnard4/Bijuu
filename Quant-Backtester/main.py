@@ -5,9 +5,6 @@ from strategy.strategy import prepare_data, generate_signals, add_trade_levels
 from analytics.metrics import build_dashboard_metrics
 
 
-df = pd.read_csv("data/nqm6_clean_1m.csv", parse_dates=["datetime"])
-
-
 def run_backtest(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy().reset_index(drop=True)
 
@@ -138,15 +135,28 @@ def build_results_df_from_trades(
     return results_df
 
 
-df = prepare_data(df)
-df = generate_signals(df)
-df = add_trade_levels(df)
+def run_pipeline(
+    csv_path: str = "data/nq_continuous_1m.csv",
+    starting_capital: float = 100000
+) -> dict:
+    df = pd.read_csv(csv_path, parse_dates=["datetime"])
 
-trades_df = run_backtest(df)
-results_df = build_results_df_from_trades(trades_df, starting_capital=100000)
+    df = prepare_data(df)
+    df = generate_signals(df)
+    df = add_trade_levels(df)
 
-metrics = build_dashboard_metrics(results_df, trades_df)
+    trades_df = run_backtest(df)
+    results_df = build_results_df_from_trades(trades_df, starting_capital=starting_capital)
+    metrics = build_dashboard_metrics(results_df, trades_df)
 
-print(trades_df.head())
-print(results_df.head())
-print(metrics)
+    return {
+        "source_df": df,
+        "trades_df": trades_df,
+        "results_df": results_df,
+        "metrics": metrics,
+    }
+
+
+if __name__ == "__main__":
+    # optional local test only
+    data = run_pipeline()
