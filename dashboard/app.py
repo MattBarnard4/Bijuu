@@ -1,13 +1,19 @@
 from pathlib import Path
 import sys
+import json
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from main import run_pipeline
 from flask import Flask, jsonify, render_template
 import pandas as pd
 import numpy as np
 
 BASE_DIR = Path(__file__).resolve().parent
+EXPORTS_DIR = BASE_DIR.parent / "exports"
+
+TRADES_CSV = EXPORTS_DIR / "trades.csv"
+RESULTS_CSV = EXPORTS_DIR / "results.csv"
+METRICS_JSON = EXPORTS_DIR / "metrics.json"
+
 app = Flask(
     __name__,
     template_folder=str(BASE_DIR / "templates"),
@@ -58,13 +64,9 @@ def run_monte_carlo(trades_df, n_sims=1000, sample_paths=35):
     rng = np.random.default_rng(42)
     n_trades = pnl.size
 
-    # bootstrap trades with replacement
     sims = rng.choice(pnl, size=(n_sims, n_trades), replace=True)
-
-    # cumulative pnl paths
     equity_paths = sims.cumsum(axis=1)
 
-    # absolute drawdown in $
     running_max = np.maximum.accumulate(equity_paths, axis=1)
     drawdowns = running_max - equity_paths
     max_drawdowns = drawdowns.max(axis=1)
@@ -100,6 +102,7 @@ def run_monte_carlo(trades_df, n_sims=1000, sample_paths=35):
         },
     }
 
+
 def build_chart_data(trades_df: pd.DataFrame):
     df = trades_df.copy()
 
@@ -111,7 +114,6 @@ def build_chart_data(trades_df: pd.DataFrame):
     df["entry_hour_est"] = entry_est.dt.hour
     df["entry_day"] = entry_est.dt.day_name()
 
-    # Win/loss distribution by R bucket
     bucket_labels = ["<-3R", "-2:-3", "-1:-2", "0:-1", "0:1", "1:2", "2:3", ">3R"]
 
     bucket_values = [
@@ -136,14 +138,12 @@ def build_chart_data(trades_df: pd.DataFrame):
          bucket_values[7],
     ]
 
-    # PnL by hour
     pnl_by_hour = (
         df.groupby("entry_hour_est")["pnl"]
         .sum()
         .reindex(range(24), fill_value=0)
     )
 
-    # PnL by day
     ordered_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
     pnl_by_day = (
         df.groupby("entry_day")["pnl"]
@@ -166,13 +166,27 @@ def build_chart_data(trades_df: pd.DataFrame):
         },
     }
 
+
+def load_saved_outputs():
+    missing = [p.name for p in [TRADES_CSV, RESULTS_CSV, METRICS_JSON] if not p.exists()]
+    if missing:
+        raise FileNotFoundError(
+            f"Missing exported files: {', '.join(missing)}. "
+            f"Run main.py first to generate them in {EXPORTS_DIR}."
+        )
+
+    trades_df = pd.read_csv(TRADES_CSV)
+    results_df = pd.read_csv(RESULTS_CSV)
+
+    with open(METRICS_JSON, "r", encoding="utf-8") as f:
+        metrics = json.load(f)
+
+    return trades_df, results_df, metrics
+
+
 @app.route("/api/dashboard-data")
 def dashboard_data():
-    data = run_pipeline()
-
-    trades_df = data["trades_df"].copy()
-    results_df = data["results_df"].copy()
-    metrics = data["metrics"]
+    trades_df, results_df, metrics = load_saved_outputs()
 
     monte_carlo = run_monte_carlo(trades_df)
     charts = build_chart_data(trades_df)
@@ -184,8 +198,8 @@ def dashboard_data():
             "monte_carlo": monte_carlo,
             "equity_curve": {
                 "dates": results_df["date"].astype(str).tolist(),
-                "equity": results_df["equity"].round(2).tolist(),
-                "drawdown": (results_df["drawdown"] * 100).round(2).tolist(),
+                "equity": pd.to_numeric(results_df["equity"], errors="coerce").round(2).tolist(),
+                "drawdown": (pd.to_numeric(results_df["drawdown"], errors="coerce") * 100).round(2).tolist(),
             },
             "trades": trades_df.tail(25).copy().assign(
                 entry_time=lambda x: x["entry_time"].astype(str),
